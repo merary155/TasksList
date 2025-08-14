@@ -378,7 +378,7 @@ def create_custom_task_charts(task_data: pd.DataFrame, task_config: dict):
         )
         
         fig.update_layout(height=400)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, key=f"custom_progress_{task_config['id']}")
     
     with col2:
         # Daily values
@@ -402,7 +402,7 @@ def create_custom_task_charts(task_data: pd.DataFrame, task_config: dict):
         )
         
         fig.update_layout(height=400, xaxis_tickangle=-45)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, key=f"custom_daily_{task_config['id']}")
     
     # Progress gauge
     if len(task_data) > 0:
@@ -435,7 +435,7 @@ def create_custom_task_charts(task_data: pd.DataFrame, task_config: dict):
         ))
         
         fig.update_layout(height=400)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, key=f"custom_gauge_{task_config['id']}")
         
         # Statistics
         st.subheader("Statistics")

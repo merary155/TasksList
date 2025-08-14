@@ -24,214 +24,68 @@ def main():
     st.markdown("Track your study progress with customizable tasks")
     
     # Create tabs for different sections
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "📊 Dashboard", "⏰ Log Study Time", "🎯 Custom Tasks", 
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "📊 Task Progress Visualization", "🎯 Custom Tasks", 
         "⚙️ Task Settings", "📈 Detailed Analytics"
     ])
     
     with tab1:
-        show_dashboard(data_manager, task_manager)
+        show_task_progress_visualization(data_manager, task_manager)
     
     with tab2:
-        log_study_time(data_manager)
-    
-    with tab3:
         manage_custom_tasks(task_manager)
     
-    with tab4:
+    with tab3:
         task_settings(task_manager)
     
-    with tab5:
+    with tab4:
         show_detailed_analytics(data_manager, task_manager)
 
-def show_dashboard(data_manager, task_manager):
-    """Display the main dashboard with current progress"""
-    st.header("Progress Overview")
+def show_task_progress_visualization(data_manager, task_manager):
+    """Display progress bars, goal completion, and study time logging"""
     
-    # Load current data
-    immersion_df = data_manager.load_immersion_data()
-    
-    # Calculate current statistics
-    total_minutes = immersion_df['minutes'].sum() if not immersion_df.empty else 0
-    total_hours = total_minutes / 60
-    progress_percentage = calculate_progress_percentage(total_minutes, 60000)
-    
-    # Display key metrics
-    col1, col2, col3, col4 = st.columns(4)
+    # Study Time Input Section
+    st.header("⏰ Log Study Time")
+    col1, col2 = st.columns([1, 1])
     
     with col1:
-        st.metric(
-            label="Total Study Time",
-            value=format_time(total_minutes),
-            delta=f"{progress_percentage:.1f}% of goal"
-        )
-    
-    with col2:
-        st.metric(
-            label="Hours Completed",
-            value=f"{total_hours:.1f}h",
-            delta=f"{1000 - total_hours:.1f}h remaining"
-        )
-    
-    with col3:
-        if not immersion_df.empty:
-            avg_session = immersion_df['minutes'].mean()
-            st.metric(
-                label="Average Session",
-                value=format_time(avg_session),
-                delta="Per study day"
-            )
-        else:
-            st.metric(label="Average Session", value="0m")
-    
-    with col4:
-        days_studied = len(immersion_df) if not immersion_df.empty else 0
-        st.metric(
-            label="Days Studied",
-            value=str(days_studied),
-            delta="Total sessions"
-        )
-    
-    # Progress charts
-    if not immersion_df.empty:
-        st.subheader("Progress Visualization")
-        create_progress_charts(immersion_df, total_minutes)
-    
-
-    
-    # All Tasks Progress Overview
-    st.subheader("All Tasks Progress")
-    
-    # Create columns for different task types
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.write("**Built-in Tasks**")
-        # Immersion progress
-        st.metric(
-            "Immersion Study",
-            f"{total_hours:.1f}h",
-            f"{progress_percentage:.1f}% of 1000h goal"
-        )
-        
-
-    
-    with col2:
-        st.write("**Custom Tasks**")
-        custom_tasks = task_manager.get_enabled_tasks()
-        if custom_tasks:
-            # Show up to 3 custom tasks
-            for task in custom_tasks[:3]:
-                summary = task_manager.get_task_summary(task['id'])
-                st.metric(
-                    label=task['name'],
-                    value=f"{summary['total_value']:.0f} {task['unit']}",
-                    delta=f"{summary['progress_percentage']:.1f}% of goal"
-                )
-            
-            if len(custom_tasks) > 3:
-                st.caption(f"... and {len(custom_tasks) - 3} more tasks")
-        else:
-            st.info("No custom tasks configured")
-    
-    # Visual progress charts for all tasks
-    if custom_tasks:
-        st.subheader("Task Progress Visualization")
-        
-        # Create tabs for different visualizations
-        viz_tab1, viz_tab2 = st.tabs(["Progress Bars", "Goal Completion"])
-        
-        with viz_tab1:
-            # Progress bars for all tasks
-            st.write("**Progress Overview**")
-            
-            # Immersion progress bar
-            immersion_progress = min(progress_percentage, 100)
-            st.write("Immersion Study (1000h goal)")
-            st.progress(immersion_progress / 100, text=f"{immersion_progress:.1f}%")
-            
-            # Custom task progress bars
-            for task in custom_tasks:
-                summary = task_manager.get_task_summary(task['id'])
-                task_progress = min(summary['progress_percentage'], 100)
-                st.write(f"{task['name']} ({task['target']} {task['unit']} goal)")
-                st.progress(task_progress / 100, text=f"{task_progress:.1f}%")
-        
-        with viz_tab2:
-            # Combined goal completion chart
-            task_names = ["Immersion (1000h)"] + [f"{task['name']} ({task['target']}{task['unit']})" for task in custom_tasks]
-            completion_rates = [min(progress_percentage, 100)]
-            
-            for task in custom_tasks:
-                summary = task_manager.get_task_summary(task['id'])
-                completion_rates.append(min(summary['progress_percentage'], 100))
-            
-            import plotly.graph_objects as go
-            fig = go.Figure(data=[
-                go.Bar(
-                    x=task_names,
-                    y=completion_rates,
-                    text=[f"{rate:.1f}%" for rate in completion_rates],
-                    textposition='auto',
-                    marker_color=['#2E8B57' if i == 0 else '#4ECDC4' for i in range(len(task_names))]
-                )
-            ])
-            
-            fig.update_layout(
-                title="Goal Completion Overview",
-                xaxis_title="Tasks",
-                yaxis_title="Completion Percentage (%)",
-                yaxis=dict(range=[0, 100]),
-                height=400,
-                xaxis_tickangle=-45
+        # Study time input form
+        with st.form("log_study_form"):
+            study_date = st.date_input(
+                "Study Date",
+                value=date.today(),
+                max_value=date.today()
             )
             
-            st.plotly_chart(fig, use_container_width=True)
-
-def log_study_time(data_manager):
-    """Interface for logging daily study time"""
-    st.header("Log Study Time")
-    
-    col1, col2 = st.columns([2, 1])
-    
-    with col1:
-        # Date selection
-        selected_date = st.date_input(
-            "Study Date",
-            value=date.today(),
-            max_value=date.today()
-        )
-        
-        # Time input
-        hours = st.number_input("Hours", min_value=0, max_value=24, value=0)
-        minutes = st.number_input("Minutes", min_value=0, max_value=59, value=0)
-        
-        total_minutes = hours * 60 + minutes
-        
-        if total_minutes > 0:
-            st.info(f"Total time: {format_time(total_minutes)}")
-        
-        # Notes (optional)
-        notes = st.text_area("Notes (optional)", placeholder="What did you study today?")
-        
-        # Submit button
-        if st.button("Log Study Time", type="primary"):
-            if total_minutes > 0:
-                success = data_manager.add_immersion_entry(selected_date, total_minutes, notes)
-                if success:
-                    st.success(f"Successfully logged {format_time(total_minutes)} for {selected_date}")
-                    st.rerun()
+            col_hours, col_minutes = st.columns(2)
+            with col_hours:
+                hours = st.number_input("Hours", min_value=0, max_value=24, value=1)
+            with col_minutes:
+                minutes = st.number_input("Minutes", min_value=0, max_value=59, value=0)
+            
+            notes = st.text_area(
+                "Notes (optional)",
+                placeholder="What did you study today?"
+            )
+            
+            if st.form_submit_button("📝 Log Study Time", type="primary"):
+                total_minutes = hours * 60 + minutes
+                if total_minutes > 0:
+                    success = data_manager.add_immersion_entry(study_date, total_minutes, notes)
+                    if success:
+                        st.success(f"Successfully logged {format_time(total_minutes)} for {study_date}")
+                        st.rerun()
+                    else:
+                        st.error("Failed to log study time. Please try again.")
                 else:
-                    st.error("Failed to log study time. Please try again.")
-            else:
-                st.error("Please enter a valid study time.")
+                    st.error("Please enter a valid study time.")
     
     with col2:
-        # Recent entries with edit/delete functionality
+        # Recent entries with delete functionality
         st.subheader("Recent Entries")
         immersion_df = data_manager.load_immersion_data()
         if not immersion_df.empty:
-            recent_entries = immersion_df.tail(10).iloc[::-1]  # Last 10, reversed
+            recent_entries = immersion_df.tail(5).iloc[::-1]  # Last 5, reversed
             
             for idx, row in recent_entries.iterrows():
                 with st.container():
@@ -246,10 +100,6 @@ def log_study_time(data_manager):
                         st.write(format_time(row['minutes']))
                     
                     with col_actions:
-                        # Edit button
-                        if st.button("✏️", key=f"edit_{idx}", help="Edit entry"):
-                            st.session_state[f"editing_{idx}"] = True
-                        
                         # Delete button
                         if st.button("🗑️", key=f"delete_{idx}", help="Delete entry"):
                             success = data_manager.delete_immersion_entry(row['date'])
@@ -259,41 +109,133 @@ def log_study_time(data_manager):
                             else:
                                 st.error("Failed to delete entry")
                     
-                    # Edit form (shown when edit button is clicked)
-                    if st.session_state.get(f"editing_{idx}", False):
-                        with st.form(key=f"edit_form_{idx}"):
-                            st.write(f"Editing entry for {row['date'].strftime('%Y-%m-%d')}")
-                            
-                            current_hours = int(row['minutes'] // 60)
-                            current_minutes = int(row['minutes'] % 60)
-                            
-                            edit_hours = st.number_input("Hours", min_value=0, max_value=24, value=current_hours, key=f"edit_hours_{idx}")
-                            edit_minutes = st.number_input("Minutes", min_value=0, max_value=59, value=current_minutes, key=f"edit_minutes_{idx}")
-                            edit_notes = st.text_area("Notes", value=row['notes'], key=f"edit_notes_{idx}")
-                            
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                if st.form_submit_button("Save Changes"):
-                                    new_total_minutes = edit_hours * 60 + edit_minutes
-                                    if new_total_minutes > 0:
-                                        success = data_manager.add_immersion_entry(row['date'], new_total_minutes, edit_notes)
-                                        if success:
-                                            st.success("Entry updated!")
-                                            st.session_state[f"editing_{idx}"] = False
-                                            st.rerun()
-                                        else:
-                                            st.error("Failed to update entry")
-                                    else:
-                                        st.error("Please enter a valid study time")
-                            
-                            with col2:
-                                if st.form_submit_button("Cancel"):
-                                    st.session_state[f"editing_{idx}"] = False
-                                    st.rerun()
-                    
                     st.divider()
         else:
             st.info("No study sessions logged yet.")
+    
+    # Progress Bars Section
+    st.header("📊 Progress Bars")
+    
+    # Load current data
+    immersion_df = data_manager.load_immersion_data()
+    total_minutes = immersion_df['minutes'].sum() if not immersion_df.empty else 0
+    total_hours = total_minutes / 60
+    progress_percentage = calculate_progress_percentage(total_minutes, 60000)
+    
+    # Immersion progress bar
+    st.subheader("Immersion Study Progress")
+    progress_bar_col, metrics_col = st.columns([3, 1])
+    
+    with progress_bar_col:
+        st.progress(progress_percentage / 100, text=f"Progress: {progress_percentage:.1f}% of 1000h goal")
+        st.write(f"**{total_hours:.1f}h** completed • **{1000 - total_hours:.1f}h** remaining")
+    
+    with metrics_col:
+        st.metric("Total Hours", f"{total_hours:.1f}h")
+        if not immersion_df.empty:
+            avg_session = immersion_df['minutes'].mean()
+            st.metric("Avg Session", format_time(avg_session))
+    
+    # Custom Tasks Progress Bars
+    custom_tasks = task_manager.get_enabled_tasks()
+    if custom_tasks:
+        st.subheader("Custom Tasks Progress")
+        
+        for task in custom_tasks:
+            task_data = task_manager.load_task_data(task['id'])
+            
+            if not task_data.empty:
+                total_value = task_data['value'].sum()
+                task_progress = min((total_value / task['target']) * 100, 100)
+                
+                progress_bar_col, metrics_col = st.columns([3, 1])
+                
+                with progress_bar_col:
+                    st.progress(
+                        task_progress / 100, 
+                        text=f"{task['name']}: {task_progress:.1f}% of {task['target']} {task['unit']}"
+                    )
+                    remaining = max(0, task['target'] - total_value)
+                    st.write(f"**{total_value:.1f} {task['unit']}** completed • **{remaining:.1f} {task['unit']}** remaining")
+                
+                with metrics_col:
+                    st.metric(f"Total {task['unit']}", f"{total_value:.1f}")
+                    if len(task_data) > 0:
+                        avg_value = task_data['value'].mean()
+                        st.metric("Daily Avg", f"{avg_value:.1f}")
+            else:
+                st.progress(0, text=f"{task['name']}: 0% of {task['target']} {task['unit']}")
+                st.write(f"**0 {task['unit']}** completed • **{task['target']} {task['unit']}** remaining")
+    
+    # Goal Completion Section
+    st.header("🏆 Goal Completion")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        # Immersion goal status
+        if progress_percentage >= 100:
+            st.success("🎉 Immersion Goal Completed!")
+        elif progress_percentage >= 75:
+            st.warning("🔥 Almost there! 75%+ completed")
+        elif progress_percentage >= 50:
+            st.info("📈 Halfway to your goal!")
+        else:
+            st.info("🌱 Just getting started")
+        
+        st.metric("Immersion Goal", f"{progress_percentage:.1f}%")
+    
+    with col2:
+        # Custom tasks completion summary
+        if custom_tasks:
+            completed_tasks = 0
+            for task in custom_tasks:
+                task_data = task_manager.load_task_data(task['id'])
+                if not task_data.empty:
+                    total_value = task_data['value'].sum()
+                    if total_value >= task['target']:
+                        completed_tasks += 1
+            
+            completion_rate = (completed_tasks / len(custom_tasks)) * 100
+            st.metric("Custom Tasks Completed", f"{completed_tasks}/{len(custom_tasks)}")
+            
+            if completion_rate == 100:
+                st.success("🎉 All custom tasks completed!")
+            elif completion_rate >= 50:
+                st.info(f"📊 {completion_rate:.0f}% of tasks completed")
+            else:
+                st.info("🚀 Keep working on your goals!")
+        else:
+            st.info("No custom tasks configured")
+    
+    with col3:
+        # Overall study streak
+        if not immersion_df.empty:
+            # Calculate study streak (consecutive days with entries)
+            dates = immersion_df['date'].sort_values(ascending=False)
+            current_streak = 0
+            today = date.today()
+            
+            for i, study_date in enumerate(dates):
+                expected_date = today - timedelta(days=i)
+                if study_date == expected_date:
+                    current_streak += 1
+                else:
+                    break
+            
+            st.metric("Study Streak", f"{current_streak} days")
+            
+            if current_streak >= 30:
+                st.success("🔥 Amazing consistency!")
+            elif current_streak >= 7:
+                st.info("📅 Great weekly habit!")
+            else:
+                st.info("💪 Building the habit!")
+        else:
+            st.metric("Study Streak", "0 days")
+            st.info("🌟 Start your journey!")
+
+
 
 
 
