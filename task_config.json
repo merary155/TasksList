@@ -8,14 +8,6 @@
       "enabled": true,
       "created_date": "2025-08-14T03:57:38.842242",
       "updated_date": "2025-08-14T04:00:05.147751"
-    },
-    {
-      "id": "toiec_シャドーイング",
-      "name": "TOIEC　シャドーイング",
-      "unit": "分",
-      "target": 30,
-      "enabled": true,
-      "created_date": "2025-08-14T04:13:20.588254"
     }
   ]
 }
