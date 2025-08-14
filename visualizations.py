@@ -341,3 +341,120 @@ def create_weekly_summary_chart(immersion_df: pd.DataFrame, toeic_df: pd.DataFra
         )
         
         st.plotly_chart(fig, use_container_width=True)
+
+def create_custom_task_charts(task_data: pd.DataFrame, task_config: dict):
+    """Create visualization charts for custom tasks"""
+    
+    if task_data.empty:
+        st.info("No data available for visualization")
+        return
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Progress over time
+        st.subheader("Progress Over Time")
+        
+        # Calculate cumulative progress
+        df_cumulative = task_data.copy()
+        df_cumulative['cumulative_value'] = df_cumulative['value'].cumsum()
+        df_cumulative['progress_percentage'] = (df_cumulative['cumulative_value'] / task_config['target']) * 100
+        
+        fig = px.line(
+            df_cumulative,
+            x='date',
+            y='cumulative_value',
+            title=f'Cumulative Progress: {task_config["name"]}',
+            labels={'cumulative_value': f'Total {task_config["unit"]}', 'date': 'Date'},
+            markers=True
+        )
+        
+        # Add target line
+        fig.add_hline(
+            y=task_config['target'],
+            line_dash="dash",
+            line_color="gold",
+            annotation_text=f"Target: {task_config['target']} {task_config['unit']}"
+        )
+        
+        fig.update_layout(height=400)
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        # Daily values
+        st.subheader("Daily Values")
+        
+        fig = px.bar(
+            task_data.tail(20),  # Last 20 entries
+            x='date',
+            y='value',
+            title=f'Daily {task_config["name"]} (Last 20 Days)',
+            labels={'value': f'{task_config["unit"]}', 'date': 'Date'}
+        )
+        
+        # Add average line
+        avg_value = task_data['value'].mean()
+        fig.add_hline(
+            y=avg_value,
+            line_dash="dash",
+            line_color="red",
+            annotation_text=f"Average: {avg_value:.1f} {task_config['unit']}"
+        )
+        
+        fig.update_layout(height=400, xaxis_tickangle=-45)
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # Progress gauge
+    if len(task_data) > 0:
+        st.subheader("Goal Progress")
+        
+        total_value = task_data['value'].sum()
+        progress_percentage = (total_value / task_config['target']) * 100
+        
+        fig = go.Figure(go.Indicator(
+            mode = "gauge+number+delta",
+            value = progress_percentage,
+            domain = {'x': [0, 1], 'y': [0, 1]},
+            title = {'text': f"{task_config['name']} Progress (%)"},
+            delta = {'reference': 100},
+            gauge = {
+                'axis': {'range': [None, 100]},
+                'bar': {'color': "darkblue"},
+                'steps': [
+                    {'range': [0, 25], 'color': "lightgray"},
+                    {'range': [25, 50], 'color': "gray"},
+                    {'range': [50, 75], 'color': "lightgreen"},
+                    {'range': [75, 100], 'color': "green"}
+                ],
+                'threshold': {
+                    'line': {'color': "red", 'width': 4},
+                    'thickness': 0.75,
+                    'value': 100
+                }
+            }
+        ))
+        
+        fig.update_layout(height=400)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Statistics
+        st.subheader("Statistics")
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Total Progress", f"{total_value:.1f} {task_config['unit']}")
+        
+        with col2:
+            remaining = max(0, task_config['target'] - total_value)
+            st.metric("Remaining", f"{remaining:.1f} {task_config['unit']}")
+        
+        with col3:
+            avg_daily = task_data['value'].mean()
+            st.metric("Daily Average", f"{avg_daily:.1f} {task_config['unit']}")
+        
+        with col4:
+            days_to_goal = remaining / avg_daily if avg_daily > 0 else float('inf')
+            if days_to_goal == float('inf') or days_to_goal < 0:
+                st.metric("Days to Goal", "Complete!" if remaining <= 0 else "∞")
+            else:
+                st.metric("Days to Goal", f"{int(days_to_goal)} days")
