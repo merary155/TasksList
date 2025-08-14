@@ -106,21 +106,101 @@ def show_dashboard(data_manager, task_manager):
         st.subheader("Recent TOEIC Performance")
         create_toeic_charts(toeic_df.tail(14))  # Last 14 days
     
-    # Custom tasks overview
-    st.subheader("Custom Tasks Overview")
-    custom_tasks = task_manager.get_enabled_tasks()
-    if custom_tasks:
-        cols = st.columns(min(len(custom_tasks), 4))
-        for i, task in enumerate(custom_tasks):
-            with cols[i % 4]:
+    # All Tasks Progress Overview
+    st.subheader("All Tasks Progress")
+    
+    # Create columns for different task types
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.write("**Built-in Tasks**")
+        # Immersion progress
+        st.metric(
+            "Immersion Study",
+            f"{total_hours:.1f}h",
+            f"{progress_percentage:.1f}% of 1000h goal"
+        )
+        
+        # TOEIC average
+        if not toeic_df.empty:
+            recent_completion = toeic_df.tail(7)['total_completed'].mean()
+            st.metric(
+                "TOEIC Tasks (7-day avg)",
+                f"{recent_completion:.1f}/3",
+                "Daily completion rate"
+            )
+    
+    with col2:
+        st.write("**Custom Tasks**")
+        custom_tasks = task_manager.get_enabled_tasks()
+        if custom_tasks:
+            # Show up to 3 custom tasks
+            for task in custom_tasks[:3]:
                 summary = task_manager.get_task_summary(task['id'])
                 st.metric(
                     label=task['name'],
-                    value=f"{summary['total_value']:.0f}{task['unit']}",
-                    delta=f"{summary['progress_percentage']:.1f}% complete"
+                    value=f"{summary['total_value']:.0f} {task['unit']}",
+                    delta=f"{summary['progress_percentage']:.1f}% of goal"
                 )
-    else:
-        st.info("No custom tasks configured. Go to Task Settings to add your own tasks!")
+            
+            if len(custom_tasks) > 3:
+                st.caption(f"... and {len(custom_tasks) - 3} more tasks")
+        else:
+            st.info("No custom tasks configured")
+    
+    # Visual progress charts for all tasks
+    if custom_tasks:
+        st.subheader("Task Progress Visualization")
+        
+        # Create tabs for different visualizations
+        viz_tab1, viz_tab2 = st.tabs(["Progress Bars", "Goal Completion"])
+        
+        with viz_tab1:
+            # Progress bars for all tasks
+            st.write("**Progress Overview**")
+            
+            # Immersion progress bar
+            immersion_progress = min(progress_percentage, 100)
+            st.write("Immersion Study (1000h goal)")
+            st.progress(immersion_progress / 100, text=f"{immersion_progress:.1f}%")
+            
+            # Custom task progress bars
+            for task in custom_tasks:
+                summary = task_manager.get_task_summary(task['id'])
+                task_progress = min(summary['progress_percentage'], 100)
+                st.write(f"{task['name']} ({task['target']} {task['unit']} goal)")
+                st.progress(task_progress / 100, text=f"{task_progress:.1f}%")
+        
+        with viz_tab2:
+            # Combined goal completion chart
+            task_names = ["Immersion (1000h)"] + [f"{task['name']} ({task['target']}{task['unit']})" for task in custom_tasks]
+            completion_rates = [min(progress_percentage, 100)]
+            
+            for task in custom_tasks:
+                summary = task_manager.get_task_summary(task['id'])
+                completion_rates.append(min(summary['progress_percentage'], 100))
+            
+            import plotly.graph_objects as go
+            fig = go.Figure(data=[
+                go.Bar(
+                    x=task_names,
+                    y=completion_rates,
+                    text=[f"{rate:.1f}%" for rate in completion_rates],
+                    textposition='auto',
+                    marker_color=['#2E8B57' if i == 0 else '#4ECDC4' for i in range(len(task_names))]
+                )
+            ])
+            
+            fig.update_layout(
+                title="Goal Completion Overview",
+                xaxis_title="Tasks",
+                yaxis_title="Completion Percentage (%)",
+                yaxis=dict(range=[0, 100]),
+                height=400,
+                xaxis_tickangle=-45
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
 
 def log_study_time(data_manager):
     """Interface for logging daily study time"""
@@ -346,6 +426,62 @@ def manage_custom_tasks(task_manager):
     if not task_data.empty:
         st.subheader("Progress Visualization")
         create_custom_task_charts(task_data, selected_task)
+    
+    # Overview of all custom tasks
+    if len(enabled_tasks) > 1:
+        st.subheader("All Custom Tasks Overview")
+        
+        # Create comparison chart
+        task_comparison_data = []
+        for task in enabled_tasks:
+            summary = task_manager.get_task_summary(task['id'])
+            task_comparison_data.append({
+                'name': task['name'],
+                'progress': summary['progress_percentage'],
+                'total': summary['total_value'],
+                'target': task['target'],
+                'unit': task['unit']
+            })
+        
+        # Progress comparison chart
+        names = [data['name'] for data in task_comparison_data]
+        progress_values = [data['progress'] for data in task_comparison_data]
+        
+        fig = go.Figure(data=[
+            go.Bar(
+                x=names,
+                y=progress_values,
+                text=[f"{val:.1f}%" for val in progress_values],
+                textposition='auto',
+                marker_color=['#4ECDC4', '#FF6B6B', '#45B7D1', '#96CEB4'][:len(names)]
+            )
+        ])
+        
+        fig.update_layout(
+            title="Custom Tasks Progress Comparison",
+            xaxis_title="Tasks",
+            yaxis_title="Completion Percentage (%)",
+            yaxis=dict(range=[0, 100]),
+            height=400,
+            xaxis_tickangle=-45
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Summary statistics
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            avg_progress = sum(progress_values) / len(progress_values)
+            st.metric("Average Progress", f"{avg_progress:.1f}%")
+        
+        with col2:
+            completed_tasks = len([p for p in progress_values if p >= 100])
+            st.metric("Completed Tasks", f"{completed_tasks}/{len(progress_values)}")
+        
+        with col3:
+            active_tasks = len([p for p in progress_values if 0 < p < 100])
+            st.metric("In Progress", f"{active_tasks} tasks")
 
 def task_settings(task_manager):
     """Interface for configuring custom tasks"""
@@ -392,78 +528,36 @@ def task_settings(task_manager):
         else:
             st.error("Please enter a task name.")
     
-    # Manage existing tasks
-    st.subheader("Manage Existing Tasks")
+    # Show current tasks summary
+    st.subheader("Current Tasks")
     
     all_tasks = task_manager.get_all_tasks()
     if all_tasks:
         for task in all_tasks:
-            with st.expander(f"{task['name']} ({task['unit']})", expanded=False):
-                col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
-                
-                with col1:
-                    # Edit task name
-                    new_name = st.text_input(
-                        "Name",
-                        value=task['name'],
-                        key=f"name_{task['id']}"
-                    )
-                
-                with col2:
-                    # Edit unit
-                    unit_idx = unit_options.index(task['unit']) if task['unit'] in unit_options else 0
-                    new_unit = st.selectbox(
-                        "Unit",
-                        unit_options,
-                        index=unit_idx,
-                        key=f"unit_{task['id']}"
-                    )
-                
-                with col3:
-                    # Edit target
-                    new_target = st.number_input(
-                        "Target",
-                        min_value=1,
-                        value=task['target'],
-                        key=f"target_{task['id']}"
-                    )
-                
-                with col4:
-                    # Enable/disable toggle
-                    enabled = st.checkbox(
-                        "Enabled",
-                        value=task.get('enabled', True),
-                        key=f"enabled_{task['id']}"
-                    )
-                
-                # Action buttons
-                col1, col2, col3 = st.columns(3)
-                
-                with col1:
-                    if st.button("Update", key=f"update_{task['id']}"):
-                        success = task_manager.update_task(
-                            task['id'], new_name, new_unit, new_target, enabled
-                        )
-                        if success:
-                            st.success("Task updated successfully!")
-                            st.rerun()
-                        else:
-                            st.error("Failed to update task.")
-                
-                with col2:
-                    # Show task summary
-                    summary = task_manager.get_task_summary(task['id'])
-                    st.write(f"Progress: {summary['progress_percentage']:.1f}%")
-                
-                with col3:
-                    if st.button("Delete", key=f"delete_{task['id']}", type="secondary"):
-                        if st.button("Confirm Delete", key=f"confirm_delete_{task['id']}", type="secondary"):
-                            success = task_manager.delete_task(task['id'])
-                            if success:
-                                st.success("Task deleted successfully!")
-                                st.rerun()
-                            else:
-                                st.error("Failed to delete task.")
+            summary = task_manager.get_task_summary(task['id'])
+            status = "✅ Enabled" if task.get('enabled', True) else "❌ Disabled"
+            
+            col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
+            
+            with col1:
+                st.write(f"**{task['name']}**")
+                st.caption(f"Target: {task['target']} {task['unit']}")
+            
+            with col2:
+                st.metric("Progress", f"{summary['total_value']:.0f} {task['unit']}")
+            
+            with col3:
+                st.metric("Completion", f"{summary['progress_percentage']:.1f}%")
+            
+            with col4:
+                st.write(status)
+                if st.button("🗑️", key=f"delete_{task['id']}", help="Delete task"):
+                    success = task_manager.delete_task(task['id'])
+                    if success:
+                        st.success("Task deleted!")
+                        st.rerun()
+            
+            st.divider()
     else:
         st.info("No tasks configured yet. Add your first task above!")
 

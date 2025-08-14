@@ -65,7 +65,7 @@ class DataManager:
             if existing_mask.any():
                 # Update existing entry
                 df.loc[existing_mask, 'minutes'] = minutes
-                df.loc[existing_mask, 'notes'] = notes
+                df.loc[existing_mask, 'notes'] = str(notes)
             else:
                 # Add new entry
                 new_entry = pd.DataFrame({
