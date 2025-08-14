@@ -83,6 +83,21 @@ class DataManager:
         except Exception as e:
             print(f"Error adding immersion entry: {e}")
             return False
+
+    def delete_immersion_entry(self, entry_date: date) -> bool:
+        """Delete an immersion study entry"""
+        try:
+            df = self.load_immersion_data()
+            
+            # Remove entry with matching date
+            df = df[df['date'] != entry_date]
+            
+            # Save updated data
+            df.to_csv(self.immersion_file, index=False)
+            return True
+        except Exception as e:
+            print(f"Error deleting immersion entry: {e}")
+            return False
     
     def add_toeic_entry(self, task_date: date, shadowing: bool, vocabulary: bool, 
                        reading: bool, notes: str = "") -> bool:

@@ -4,7 +4,7 @@ from datetime import datetime, date, timedelta
 import plotly.express as px
 import plotly.graph_objects as go
 from data_manager import DataManager
-from visualizations import create_progress_charts, create_toeic_charts, create_custom_task_charts
+from visualizations import create_progress_charts, create_custom_task_charts
 from utils import format_time, calculate_progress_percentage
 from task_config_manager import TaskConfigManager
 
@@ -24,9 +24,9 @@ def main():
     st.markdown("Track your study progress with customizable tasks")
     
     # Create tabs for different sections
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-        "📊 Dashboard", "⏰ Log Study Time", "✅ TOEIC Tasks", 
-        "🎯 Custom Tasks", "⚙️ Task Settings", "📈 Detailed Analytics"
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "📊 Dashboard", "⏰ Log Study Time", "🎯 Custom Tasks", 
+        "⚙️ Task Settings", "📈 Detailed Analytics"
     ])
     
     with tab1:
@@ -36,15 +36,12 @@ def main():
         log_study_time(data_manager)
     
     with tab3:
-        log_toeic_tasks(data_manager)
-    
-    with tab4:
         manage_custom_tasks(task_manager)
     
-    with tab5:
+    with tab4:
         task_settings(task_manager)
     
-    with tab6:
+    with tab5:
         show_detailed_analytics(data_manager, task_manager)
 
 def show_dashboard(data_manager, task_manager):
@@ -53,7 +50,6 @@ def show_dashboard(data_manager, task_manager):
     
     # Load current data
     immersion_df = data_manager.load_immersion_data()
-    toeic_df = data_manager.load_toeic_data()
     
     # Calculate current statistics
     total_minutes = immersion_df['minutes'].sum() if not immersion_df.empty else 0
@@ -78,15 +74,15 @@ def show_dashboard(data_manager, task_manager):
         )
     
     with col3:
-        if not toeic_df.empty:
-            recent_completion = toeic_df.tail(7)['total_completed'].mean()
+        if not immersion_df.empty:
+            avg_session = immersion_df['minutes'].mean()
             st.metric(
-                label="Avg Daily TOEIC Tasks",
-                value=f"{recent_completion:.1f}/3",
-                delta="Last 7 days"
+                label="Average Session",
+                value=format_time(avg_session),
+                delta="Per study day"
             )
         else:
-            st.metric(label="Avg Daily TOEIC Tasks", value="0/3")
+            st.metric(label="Average Session", value="0m")
     
     with col4:
         days_studied = len(immersion_df) if not immersion_df.empty else 0
@@ -101,10 +97,7 @@ def show_dashboard(data_manager, task_manager):
         st.subheader("Progress Visualization")
         create_progress_charts(immersion_df, total_minutes)
     
-    # Recent TOEIC performance
-    if not toeic_df.empty:
-        st.subheader("Recent TOEIC Performance")
-        create_toeic_charts(toeic_df.tail(14))  # Last 14 days
+
     
     # All Tasks Progress Overview
     st.subheader("All Tasks Progress")
@@ -121,14 +114,7 @@ def show_dashboard(data_manager, task_manager):
             f"{progress_percentage:.1f}% of 1000h goal"
         )
         
-        # TOEIC average
-        if not toeic_df.empty:
-            recent_completion = toeic_df.tail(7)['total_completed'].mean()
-            st.metric(
-                "TOEIC Tasks (7-day avg)",
-                f"{recent_completion:.1f}/3",
-                "Daily completion rate"
-            )
+
     
     with col2:
         st.write("**Custom Tasks**")
@@ -241,95 +227,75 @@ def log_study_time(data_manager):
                 st.error("Please enter a valid study time.")
     
     with col2:
-        # Recent entries
+        # Recent entries with edit/delete functionality
         st.subheader("Recent Entries")
         immersion_df = data_manager.load_immersion_data()
         if not immersion_df.empty:
-            recent_entries = immersion_df.tail(5).iloc[::-1]  # Last 5, reversed
-            for _, row in recent_entries.iterrows():
+            recent_entries = immersion_df.tail(10).iloc[::-1]  # Last 10, reversed
+            
+            for idx, row in recent_entries.iterrows():
                 with st.container():
-                    st.write(f"**{row['date'].strftime('%m/%d')}**: {format_time(row['minutes'])}")
-                    if row['notes']:
-                        st.caption(row['notes'])
+                    col_date, col_time, col_actions = st.columns([2, 2, 1])
+                    
+                    with col_date:
+                        st.write(f"**{row['date'].strftime('%m/%d')}**")
+                        if row['notes']:
+                            st.caption(row['notes'])
+                    
+                    with col_time:
+                        st.write(format_time(row['minutes']))
+                    
+                    with col_actions:
+                        # Edit button
+                        if st.button("✏️", key=f"edit_{idx}", help="Edit entry"):
+                            st.session_state[f"editing_{idx}"] = True
+                        
+                        # Delete button
+                        if st.button("🗑️", key=f"delete_{idx}", help="Delete entry"):
+                            success = data_manager.delete_immersion_entry(row['date'])
+                            if success:
+                                st.success("Entry deleted!")
+                                st.rerun()
+                            else:
+                                st.error("Failed to delete entry")
+                    
+                    # Edit form (shown when edit button is clicked)
+                    if st.session_state.get(f"editing_{idx}", False):
+                        with st.form(key=f"edit_form_{idx}"):
+                            st.write(f"Editing entry for {row['date'].strftime('%Y-%m-%d')}")
+                            
+                            current_hours = int(row['minutes'] // 60)
+                            current_minutes = int(row['minutes'] % 60)
+                            
+                            edit_hours = st.number_input("Hours", min_value=0, max_value=24, value=current_hours, key=f"edit_hours_{idx}")
+                            edit_minutes = st.number_input("Minutes", min_value=0, max_value=59, value=current_minutes, key=f"edit_minutes_{idx}")
+                            edit_notes = st.text_area("Notes", value=row['notes'], key=f"edit_notes_{idx}")
+                            
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                if st.form_submit_button("Save Changes"):
+                                    new_total_minutes = edit_hours * 60 + edit_minutes
+                                    if new_total_minutes > 0:
+                                        success = data_manager.add_immersion_entry(row['date'], new_total_minutes, edit_notes)
+                                        if success:
+                                            st.success("Entry updated!")
+                                            st.session_state[f"editing_{idx}"] = False
+                                            st.rerun()
+                                        else:
+                                            st.error("Failed to update entry")
+                                    else:
+                                        st.error("Please enter a valid study time")
+                            
+                            with col2:
+                                if st.form_submit_button("Cancel"):
+                                    st.session_state[f"editing_{idx}"] = False
+                                    st.rerun()
+                    
+                    st.divider()
         else:
             st.info("No study sessions logged yet.")
 
-def log_toeic_tasks(data_manager):
-    """Interface for logging TOEIC task completion"""
-    st.header("TOEIC Daily Tasks")
-    
-    col1, col2 = st.columns([2, 1])
-    
-    with col1:
-        # Date selection
-        selected_date = st.date_input(
-            "Task Date",
-            value=date.today(),
-            max_value=date.today(),
-            key="toeic_date"
-        )
-        
-        st.subheader("Task Completion")
-        
-        # Task checkboxes
-        shadowing = st.checkbox(
-            "Shadowing Practice (30 minutes)",
-            help="Complete 30 minutes of shadowing practice"
-        )
-        
-        vocabulary = st.checkbox(
-            "Vocabulary Test (200 questions)",
-            help="Complete 200 vocabulary questions"
-        )
-        
-        reading = st.checkbox(
-            "Reading Comprehension (3 triple passages)",
-            help="Complete 3 triple passage reading exercises"
-        )
-        
-        # Additional notes
-        notes = st.text_area(
-            "Task Notes (optional)",
-            placeholder="Any observations or difficulties with today's tasks?"
-        )
-        
-        # Submit button
-        if st.button("Log TOEIC Tasks", type="primary"):
-            success = data_manager.add_toeic_entry(
-                selected_date, shadowing, vocabulary, reading, notes
-            )
-            if success:
-                completed_count = sum([shadowing, vocabulary, reading])
-                st.success(f"Successfully logged {completed_count}/3 tasks for {selected_date}")
-                st.rerun()
-            else:
-                st.error("Failed to log TOEIC tasks. Please try again.")
-    
-    with col2:
-        # Recent task completion
-        st.subheader("Recent Completion")
-        toeic_df = data_manager.load_toeic_data()
-        if not toeic_df.empty:
-            recent_entries = toeic_df.tail(7).iloc[::-1]  # Last 7 days, reversed
-            for _, row in recent_entries.iterrows():
-                with st.container():
-                    completed = row['total_completed']
-                    completion_emoji = "✅" if completed == 3 else "⚠️" if completed > 0 else "❌"
-                    st.write(f"**{row['date'].strftime('%m/%d')}** {completion_emoji} {completed}/3 tasks")
-                    
-                    # Show individual task status
-                    task_status = []
-                    if row['shadowing']:
-                        task_status.append("🗣️ Shadowing")
-                    if row['vocabulary']:
-                        task_status.append("📝 Vocabulary")
-                    if row['reading']:
-                        task_status.append("📖 Reading")
-                    
-                    if task_status:
-                        st.caption(" • ".join(task_status))
-        else:
-            st.info("No TOEIC tasks logged yet.")
+
 
 def manage_custom_tasks(task_manager):
     """Interface for managing custom task progress"""
@@ -567,9 +533,9 @@ def show_detailed_analytics(data_manager, task_manager):
     
     # Load data
     immersion_df = data_manager.load_immersion_data()
-    toeic_df = data_manager.load_toeic_data()
+    custom_tasks = task_manager.get_enabled_tasks()
     
-    if immersion_df.empty and toeic_df.empty:
+    if immersion_df.empty and not custom_tasks:
         st.info("No data available for analytics. Start logging your study sessions!")
         return
     
@@ -621,34 +587,7 @@ def show_detailed_analytics(data_manager, task_manager):
             st.write(f"**Average daily study time**: {format_time(avg_daily)}")
             st.write(f"**Total study time in period**: {format_time(total_time)}")
     
-    # TOEIC Analytics
-    if not toeic_df.empty:
-        st.subheader("✅ TOEIC Task Analytics")
-        
-        # Task completion trends
-        fig = px.line(
-            toeic_df.tail(30),  # Last 30 days
-            x='date',
-            y=['shadowing', 'vocabulary', 'reading'],
-            title='TOEIC Task Completion Trends (Last 30 Days)',
-            labels={'value': 'Completed (1=Yes, 0=No)', 'date': 'Date'}
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Completion rate summary
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            shadowing_rate = toeic_df['shadowing'].mean() * 100
-            st.metric("Shadowing Completion Rate", f"{shadowing_rate:.1f}%")
-        
-        with col2:
-            vocab_rate = toeic_df['vocabulary'].mean() * 100
-            st.metric("Vocabulary Completion Rate", f"{vocab_rate:.1f}%")
-        
-        with col3:
-            reading_rate = toeic_df['reading'].mean() * 100
-            st.metric("Reading Completion Rate", f"{reading_rate:.1f}%")
+
     
     # Custom tasks analytics
     custom_tasks = task_manager.get_enabled_tasks()
@@ -670,7 +609,7 @@ def show_detailed_analytics(data_manager, task_manager):
     
     # Data export section
     st.subheader("📁 Data Export")
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     
     with col1:
         if st.button("Download Immersion Data"):
@@ -686,19 +625,6 @@ def show_detailed_analytics(data_manager, task_manager):
                 st.warning("No immersion data to export")
     
     with col2:
-        if st.button("Download TOEIC Data"):
-            if not toeic_df.empty:
-                csv = toeic_df.to_csv(index=False)
-                st.download_button(
-                    label="Download CSV",
-                    data=csv,
-                    file_name=f"toeic_data_{datetime.now().strftime('%Y%m%d')}.csv",
-                    mime="text/csv"
-                )
-            else:
-                st.warning("No TOEIC data to export")
-    
-    with col3:
         if st.button("Download Custom Task Data"):
             if custom_tasks:
                 # Export all custom task data as a combined file

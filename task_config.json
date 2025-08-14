@@ -8,30 +8,6 @@
       "enabled": true,
       "created_date": "2025-08-14T03:57:38.842242",
       "updated_date": "2025-08-14T04:00:05.147751"
-    },
-    {
-      "id": "toeic_shadowing",
-      "name": "シャドーイング練習",
-      "unit": "回",
-      "target": 365,
-      "enabled": true,
-      "created_date": "2025-08-14T03:57:38.842252"
-    },
-    {
-      "id": "toeic_vocabulary",
-      "name": "単語テスト",
-      "unit": "問",
-      "target": 73000,
-      "enabled": true,
-      "created_date": "2025-08-14T03:57:38.842255"
-    },
-    {
-      "id": "toeic_reading",
-      "name": "長文読解",
-      "unit": "題",
-      "target": 1095,
-      "enabled": true,
-      "created_date": "2025-08-14T03:57:38.842256"
     }
   ]
 }
